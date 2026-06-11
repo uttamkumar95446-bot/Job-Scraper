@@ -1,0 +1,60 @@
+{
+  "props": {
+    "pageProps": {
+      "apolloState": {
+        "data": {
+          "JobListingSearchResult:1": {
+            "__typename": "JobListingSearchResult",
+            "id": "1",
+            "title": "Software Engineer",
+            "startup": {
+              "$ref": "Startup:101"
+            },
+            "location": "San Francisco, CA",
+            "createdAt": "2025-05-15T10:00:00Z",
+            "slug": "software-engineer-1"
+          },
+          "JobListingSearchResult:2": {
+            "__typename": "JobListingSearchResult",
+            "id": "2",
+            "title": "Product Manager",
+            "startup": {
+              "$ref": "Startup:102"
+            },
+            "location": "Remote",
+            "createdAt": "2025-05-20T08:30:00Z",
+            "slug": "product-manager-2"
+          },
+          "JobListingSearchResult:3": {
+            "__typename": "JobListingSearchResult",
+            "id": "3",
+            "title": "Data Analyst",
+            "startup": {
+              "$ref": "Startup:103"
+            },
+            "location": "New York, NY",
+            "createdAt": "2025-05-18T14:00:00Z"
+          },
+          "Startup:101": {
+            "__typename": "Startup",
+            "id": "101",
+            "name": "Acme Corp",
+            "slug": "acme-corp"
+          },
+          "Startup:102": {
+            "__typename": "Startup",
+            "id": "102",
+            "name": "TechStart Inc",
+            "slug": "techstart-inc"
+          },
+          "Startup:103": {
+            "__typename": "Startup",
+            "id": "103",
+            "name": "DataViz Labs",
+            "slug": "dataviz-labs"
+          }
+        }
+      }
+    }
+  }
+}
