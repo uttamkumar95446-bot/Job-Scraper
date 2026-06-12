@@ -20,3 +20,5 @@ mypy>=1.8.0
 # Testing (dev)
 pytest>=8.0.0
 pytest-cov>=4.1.0
+# Web UI
+streamlit>=1.28.0
