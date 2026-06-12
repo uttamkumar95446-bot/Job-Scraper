@@ -24,9 +24,10 @@ _PROJECT_ROOT = _HERE.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+import importlib
+
 from src.csv_writer import write_jobs_to_csv
 from src.models import Job
-from src.scrapers import NaukriScraper, RemoteOKScraper, WellfoundScraper
 from src.scrapers.base import BaseScraper
 
 # Load .env file (for FIRECRAWL_API_KEY and other secrets)
@@ -43,10 +44,21 @@ st.set_page_config(
 
 # --- Constants ---
 
-ALL_SCRAPERS: dict[str, type[BaseScraper]] = {
-    "Naukri": NaukriScraper,
-    "RemoteOK": RemoteOKScraper,
-    "Wellfound": WellfoundScraper,
+# Lazy import map: scraper name → (module path, class name)
+# The actual import happens only when the scraper is instantiated at search time.
+# This avoids importing heavy dependencies (e.g. undetected_chromedriver, selenium)
+# at app startup, which is especially important on Streamlit Cloud (Python 3.14+).
+SCRAPER_IMPORTS: dict[str, tuple[str, str]] = {
+    "Naukri": ("src.scrapers.naukri", "NaukriScraper"),
+    "RemoteOK": ("src.scrapers.remoteok", "RemoteOKScraper"),
+    "Wellfound": ("src.scrapers.wellfound", "WellfoundScraper"),
+}
+
+# Map internal source keys → display names (no import needed)
+SOURCE_NAMES: dict[str, str] = {
+    "naukri": "Naukri",
+    "remoteok": "RemoteOK",
+    "wellfound": "Wellfound",
 }
 
 SOURCE_ICONS: dict[str, str] = {
@@ -70,13 +82,30 @@ for key in ("jobs", "csv_path", "search_role", "search_location", "search_source
 # --- Helper functions ---
 
 
+def _get_scraper(name: str) -> BaseScraper:
+    """Lazily import and instantiate a scraper by display name.
+
+    The actual ``import`` statement is deferred until this function is called,
+    so heavy dependencies like ``undetected_chromedriver`` are only loaded
+    when the user runs a search that uses that scraper.
+    """
+    entry = SCRAPER_IMPORTS.get(name)
+    if entry is None:
+        raise ValueError(f"Unknown scraper: {name}")
+    module_path, class_name = entry
+    module = importlib.import_module(module_path)
+    cls = getattr(module, class_name)
+    return cls()
+
+
 def run_scrapers(role: str, location: Optional[str], sources: list[str]) -> list[Job]:
     """Run selected scrapers in parallel and return collected jobs."""
     scrapers: list[BaseScraper] = []
     for name in sources:
-        cls = ALL_SCRAPERS.get(name)
-        if cls is not None:
-            scrapers.append(cls())
+        try:
+            scrapers.append(_get_scraper(name))
+        except Exception as e:
+            st.warning(f"Could not load scraper '{name}': {e}")
 
     if not scrapers:
         return []
@@ -213,7 +242,7 @@ if firecrawl_key:
 else:
     st.sidebar.warning(":warning: FIRECRAWL_API_KEY not set --- Wellfound won't work")
 
-st.sidebar.caption(f"Streamlit v{st.__version__}")
+st.sidebar.caption(f"Streamlit v{st.__version__}  ·  Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
 
 # --- Main area ---
 
@@ -265,7 +294,7 @@ if jobs is not None:
     with cols[0]:
         st.metric("Total Jobs", len(jobs))
 
-    source_name_map = {cls.source: name for name, cls in ALL_SCRAPERS.items()}
+    source_name_map = SOURCE_NAMES
     for i, (source_key, display_name) in enumerate(source_name_map.items(), start=1):
         if i < 4:
             count = source_counts.get(source_key, 0)
@@ -283,4 +312,125 @@ if jobs is not None:
         st.bar_chart(chart_data, x="Source", y="Count", color="Source")
 
     # --- Results table ---
-    st.subheader
+    st.subheader(":clipboard: Job Listings")
+    search_role = st.session_state.search_role or ""
+    search_location = st.session_state.search_location
+    location_str = f" in **{search_location}**" if search_location else ""
+    st.caption(
+        f"Found {len(jobs)} job{'s' if len(jobs) != 1 else ''} "
+        f"for **{search_role}**{location_str}"
+    )
+
+    # Convert jobs to a list of dicts for display
+    table_data = []
+    for job in jobs:
+        table_data.append(
+            {
+                "Title": job.title,
+                "Company": job.company,
+                "Location": job.location,
+                "Source": job.source.upper(),
+                "Date Posted": job.date_posted,
+                "URL": job.url,
+            }
+        )
+
+    st.dataframe(
+        table_data,
+        column_config={
+            "Title": st.column_config.TextColumn("Title", width="medium"),
+            "Company": st.column_config.TextColumn("Company", width="medium"),
+            "Location": st.column_config.TextColumn("Location", width="small"),
+            "Source": st.column_config.TextColumn("Source", width="small"),
+            "Date Posted": st.column_config.TextColumn("Date Posted", width="small"),
+            "URL": st.column_config.LinkColumn(
+                "URL", width="large", display_text="Open link"
+            ),
+        },
+        use_container_width=True,
+        hide_index=True,
+        height=min(600, 40 * len(table_data)),
+    )
+
+    # --- Download CSV ---
+    if st.session_state.csv_path:
+        csv_path: Path = st.session_state.csv_path
+        with open(csv_path, "r", encoding="utf-8") as f:
+            csv_data = f.read()
+
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            st.download_button(
+                label=":inbox_tray: Download CSV",
+                data=csv_data,
+                file_name=csv_path.name,
+                mime="text/csv",
+                use_container_width=True,
+            )
+        with col2:
+            st.caption(
+                f"Saved to `{csv_path}` ({format_file_size(csv_path)})"
+            )
+
+# --- History section ---
+
+st.divider()
+st.subheader(":open_file_folder: Previous Runs")
+
+previous_csvs = list_previous_csvs()
+
+if not previous_csvs:
+    st.info(
+        "No previous CSV files found in the `output/` directory. "
+        "Run a search to generate one."
+    )
+else:
+    st.caption(
+        f"{len(previous_csvs)} CSV file{'s' if len(previous_csvs) != 1 else ''} "
+        f"found in `output/`"
+    )
+
+    for csv_file in previous_csvs[:10]:
+        file_size = format_file_size(csv_file)
+        try:
+            ts_str = csv_file.stem.replace("jobs_", "")
+            ts = datetime.strptime(ts_str, "%Y%m%d_%H%M%S")
+            display_name = ts.strftime("%b %d, %Y at %I:%M %p")
+        except ValueError:
+            display_name = csv_file.name
+
+        with st.expander(f":page_facing_up: {display_name} ({file_size})"):
+            preview = read_csv_preview(csv_file, n=10)
+            if preview:
+                st.dataframe(preview, use_container_width=True, hide_index=True)
+            else:
+                st.caption("Empty file (header only).")
+
+            with open(csv_file, "r", encoding="utf-8") as f:
+                csv_data = f.read()
+
+            col_a, col_b = st.columns([1, 3])
+            with col_a:
+                st.download_button(
+                    label=":inbox_tray: Download",
+                    data=csv_data,
+                    file_name=csv_file.name,
+                    mime="text/csv",
+                    key=f"download_{csv_file.name}",
+                    use_container_width=True,
+                )
+            with col_b:
+                st.caption(f"Path: `{csv_file}`")
+
+    if len(previous_csvs) > 10:
+        st.caption(f"... and {len(previous_csvs) - 10} more files")
+
+
+# --- Footer ---
+
+st.divider()
+st.caption(
+    ":briefcase: **Job Agent** --- Built with Streamlit. "
+    "Data sourced from Naukri, RemoteOK, and Wellfound. "
+    "Use responsibly and respect platform terms of service."
+)
