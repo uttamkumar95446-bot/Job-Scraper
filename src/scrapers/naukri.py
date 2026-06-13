@@ -24,28 +24,43 @@ except ModuleNotFoundError:
     class _LooseVersion:
         """Minimal ``distutils.version.LooseVersion`` replacement.
 
-        Supports the operations ``undetected-chromedriver`` actually uses:
-        construction from a string, ``<`` comparison, and ``repr``.
+        Matches the original interface that ``undetected-chromedriver``
+        depends on:
+        - ``.vstring`` — original version string
+        - ``.version`` — list of parsed components (accessed as ``.version[0]``)
+        - ``parse(vstring)`` — parse a version string
+        - ``<``, ``==`` comparison operators
+        - ``__str__`` / ``__repr__``
         """
-        def __init__(self, vstring: str) -> None:
-            self._vstring = vstring
-            self._components = tuple(
+        def __init__(self, vstring: str = "") -> None:
+            self.parse(vstring)
+
+        def parse(self, vstring: str) -> None:
+            """Parse a version string into components."""
+            self.vstring = vstring
+            # Parse into a list (not tuple) to match original ``distutils``
+            # behaviour that ``undetected-chromedriver`` expects.
+            # ``version[0]`` gives the major version number.
+            self.version = [
                 int(c) if c.isdigit() else c
                 for c in re.findall(r"[\d]+|[a-zA-Z]+", vstring)
-            )
+            ]
 
         def __lt__(self, other: object) -> bool:
             if not isinstance(other, _LooseVersion):
                 return NotImplemented
-            return self._components < other._components
+            return self.version < other.version
 
         def __eq__(self, other: object) -> bool:
             if not isinstance(other, _LooseVersion):
                 return NotImplemented
-            return self._components == other._components
+            return self.version == other.version
+
+        def __str__(self) -> str:
+            return self.vstring
 
         def __repr__(self) -> str:
-            return f"LooseVersion('{self._vstring}')"
+            return f"LooseVersion('{self.vstring}')"
 
     class _StrictVersion:
         """Minimal ``distutils.version.StrictVersion`` replacement."""
