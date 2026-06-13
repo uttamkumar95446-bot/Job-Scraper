@@ -16,7 +16,9 @@ from dotenv import load_dotenv
 
 from src.csv_writer import write_jobs_to_csv, print_summary
 from src.models import Job
-from src.scrapers import NaukriScraper, RemoteOKScraper, WellfoundScraper
+from src.scrapers.naukri import NaukriScraper
+from src.scrapers.remoteok import RemoteOKScraper
+from src.scrapers.wellfound import WellfoundScraper
 from src.scrapers.base import BaseScraper
 
 # Registry of all available scrapers
