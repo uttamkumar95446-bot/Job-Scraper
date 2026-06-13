@@ -349,7 +349,6 @@ if jobs is not None:
         },
         use_container_width=True,
         hide_index=True,
-        height=min(600, 40 * len(table_data)),
     )
 
     # --- Download CSV ---
