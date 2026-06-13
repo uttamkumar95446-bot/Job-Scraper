@@ -7,6 +7,65 @@ Chrome via Selenium, then parse the rendered HTML with BeautifulSoup.
 import logging
 import re
 import time
+import sys
+
+# ── Python 3.14+ compatibility shim for distutils.version ────────────────
+# ``undetected-chromedriver`` 3.5.5 (the latest on PyPI) imports
+# ``from distutils.version import LooseVersion``, but the ``distutils``
+# package was removed from the standard library in Python 3.12 and
+# doesn't exist in Python 3.14.  We inject a minimal polyfill so the
+# third-party package can load without errors.
+# -------------------------------------------------------------------------
+try:
+    from distutils.version import LooseVersion, StrictVersion
+except ModuleNotFoundError:
+    import types as _types
+
+    class _LooseVersion:
+        """Minimal ``distutils.version.LooseVersion`` replacement.
+
+        Supports the operations ``undetected-chromedriver`` actually uses:
+        construction from a string, ``<`` comparison, and ``repr``.
+        """
+        def __init__(self, vstring: str) -> None:
+            self._vstring = vstring
+            self._components = tuple(
+                int(c) if c.isdigit() else c
+                for c in re.findall(r"[\d]+|[a-zA-Z]+", vstring)
+            )
+
+        def __lt__(self, other: object) -> bool:
+            if not isinstance(other, _LooseVersion):
+                return NotImplemented
+            return self._components < other._components
+
+        def __eq__(self, other: object) -> bool:
+            if not isinstance(other, _LooseVersion):
+                return NotImplemented
+            return self._components == other._components
+
+        def __repr__(self) -> str:
+            return f"LooseVersion('{self._vstring}')"
+
+    class _StrictVersion:
+        """Minimal ``distutils.version.StrictVersion`` replacement."""
+        def __init__(self, vstring: str) -> None:
+            self._vstring = vstring
+
+        def __repr__(self) -> str:
+            return f"StrictVersion('{self._vstring}')"
+
+    # Inject into ``sys.modules`` so ``undetected_chromedriver`` finds it
+    _distutils = _types.ModuleType("distutils")
+    _distutils_version = _types.ModuleType("distutils.version")
+    _distutils_version.LooseVersion = _LooseVersion
+    _distutils_version.StrictVersion = _StrictVersion
+    _distutils.version = _distutils_version
+    sys.modules["distutils"] = _distutils
+    sys.modules["distutils.version"] = _distutils_version
+
+    del _types
+
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
