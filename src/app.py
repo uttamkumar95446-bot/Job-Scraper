@@ -112,7 +112,6 @@ def run_scrapers(role: str, location: Optional[str], sources: list[str]) -> list
 
     all_jobs: list[Job] = []
     progress_bar = st.progress(0, text="Initialising scrapers...")
-    status_text = st.empty()
 
     with ThreadPoolExecutor(max_workers=len(scrapers)) as executor:
         futures = {
@@ -127,16 +126,19 @@ def run_scrapers(role: str, location: Optional[str], sources: list[str]) -> list
             try:
                 jobs = future.result()
                 all_jobs.extend(jobs)
-                status_text.text(
-                    f":white_check_mark: {scraper.source}: {len(jobs)} jobs found "
-                    f"({completed}/{total})"
+                msg = (
+                    f":white_check_mark: **{scraper.source}**: "
+                    f"{len(jobs)} jobs found"
                 )
+                st.info(msg)
             except Exception as e:
-                status_text.text(f":x: {scraper.source}: {e} ({completed}/{total})")
+                msg = (
+                    f":x: **{scraper.source}**: {e}"
+                )
+                st.warning(msg)
             progress_bar.progress(completed / total)
 
     progress_bar.empty()
-    status_text.empty()
     return all_jobs
 
 
