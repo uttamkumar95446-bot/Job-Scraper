@@ -226,7 +226,7 @@ if use_wellfound:
 run_button = st.sidebar.button(
     ":rocket: Run Search",
     type="primary",
-    use_container_width=True,
+    width='stretch',
     disabled=not role.strip() or not selected_sources,
 )
 
@@ -347,7 +347,7 @@ if jobs is not None:
                 "URL", width="large", display_text="Open link"
             ),
         },
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
     )
 
@@ -364,7 +364,7 @@ if jobs is not None:
                 data=csv_data,
                 file_name=csv_path.name,
                 mime="text/csv",
-                use_container_width=True,
+                width='stretch',
             )
         with col2:
             st.caption(
@@ -401,7 +401,7 @@ else:
         with st.expander(f":page_facing_up: {display_name} ({file_size})"):
             preview = read_csv_preview(csv_file, n=10)
             if preview:
-                st.dataframe(preview, use_container_width=True, hide_index=True)
+                st.dataframe(preview, width='stretch', hide_index=True)
             else:
                 st.caption("Empty file (header only).")
 
@@ -416,7 +416,7 @@ else:
                     file_name=csv_file.name,
                     mime="text/csv",
                     key=f"download_{csv_file.name}",
-                    use_container_width=True,
+                    width='stretch',
                 )
             with col_b:
                 st.caption(f"Path: `{csv_file}`")
